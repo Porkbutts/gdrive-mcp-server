@@ -6,18 +6,15 @@ Provides tools to list, search, read, upload, create, share, and delete
 files in Google Drive using OAuth 2.0 authentication.
 """
 
-import json
 import os
 import io
 import base64
-from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 from mcp.server.fastmcp import FastMCP
 
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
@@ -28,45 +25,32 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-# Paths – override with env vars if desired
-CREDENTIALS_PATH = os.environ.get(
-    "GDRIVE_CREDENTIALS_PATH",
-    str(Path.home() / ".config" / "google-drive-mcp" / "credentials.json"),
-)
-TOKEN_PATH = os.environ.get(
-    "GDRIVE_TOKEN_PATH",
-    str(Path.home() / ".config" / "google-drive-mcp" / "token.json"),
-)
-
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 
 
 def _get_credentials() -> Credentials:
-    """Load or create OAuth 2.0 credentials via interactive browser flow."""
-    creds = None
+    """Build OAuth 2.0 credentials from environment variables."""
+    client_id = os.environ.get("GDRIVE_CLIENT_ID")
+    client_secret = os.environ.get("GDRIVE_CLIENT_SECRET")
+    refresh_token = os.environ.get("GDRIVE_REFRESH_TOKEN")
 
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    if not all([client_id, client_secret, refresh_token]):
+        raise ValueError(
+            "Missing required environment variables. Set all of: "
+            "GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_REFRESH_TOKEN"
+        )
 
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    elif not creds or not creds.valid:
-        if not os.path.exists(CREDENTIALS_PATH):
-            raise FileNotFoundError(
-                f"OAuth client credentials not found at {CREDENTIALS_PATH}. "
-                "Download your OAuth 2.0 Client ID JSON from the Google Cloud "
-                "Console and place it there, or set GDRIVE_CREDENTIALS_PATH."
-            )
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-        creds = flow.run_local_server(port=0)
-
-        # Persist for next run
-        os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
-        with open(TOKEN_PATH, "w") as f:
-            f.write(creds.to_json())
-
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        client_id=client_id,
+        client_secret=client_secret,
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=SCOPES,
+    )
+    creds.refresh(Request())
     return creds
 
 
@@ -645,5 +629,38 @@ async def gdrive_delete_file(params: DeleteFileInput) -> str:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
+def _run_auth_flow():
+    """Run interactive OAuth flow to obtain a refresh token."""
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    client_id = os.environ.get("GDRIVE_CLIENT_ID")
+    client_secret = os.environ.get("GDRIVE_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        print("Error: Set GDRIVE_CLIENT_ID and GDRIVE_CLIENT_SECRET environment variables first.")
+        raise SystemExit(1)
+
+    client_config = {
+        "installed": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    }
+
+    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+    creds = flow.run_local_server(port=0)
+
+    print("\nAuth successful! Set this environment variable:\n")
+    print(f"  GDRIVE_REFRESH_TOKEN={creds.refresh_token}\n")
+
+
 if __name__ == "__main__":
-    mcp.run()
+    import sys
+
+    if "--auth" in sys.argv:
+        _run_auth_flow()
+    else:
+        mcp.run()

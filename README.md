@@ -17,7 +17,7 @@ An MCP (Model Context Protocol) server for the Google Drive API v3. This server 
 
 - Python 3.10+
 - Google Cloud project with Google Drive API enabled
-- OAuth 2.0 credentials (Desktop app type)
+- OAuth 2.0 client ID, client secret, and refresh token
 
 ## Installation
 
@@ -33,27 +33,25 @@ pip install -e .
 
 ## Configuration
 
-Place your OAuth 2.0 Client ID JSON file at:
-
-```
-~/.config/google-drive-mcp/credentials.json
-```
-
-Or override the path with environment variables:
+Set the following environment variables:
 
 ```bash
-export GDRIVE_CREDENTIALS_PATH=/path/to/credentials.json
-export GDRIVE_TOKEN_PATH=/path/to/token.json
+export GDRIVE_CLIENT_ID=your-client-id
+export GDRIVE_CLIENT_SECRET=your-client-secret
+export GDRIVE_REFRESH_TOKEN=your-refresh-token
 ```
-
-On first run, a browser window will open for OAuth consent. The token is cached at `~/.config/google-drive-mcp/token.json` for subsequent runs.
 
 ## Usage with Claude Code
 
 ```bash
 claude mcp add-json google-drive '{
   "command": "uv",
-  "args": ["run", "--directory", "/path/to/gdrive-mcp-server", "python", "-m", "gdrive_mcp_server.server"]
+  "args": ["run", "--directory", "/path/to/gdrive-mcp-server", "python", "-m", "gdrive_mcp_server.server"],
+  "env": {
+    "GDRIVE_CLIENT_ID": "your-client-id",
+    "GDRIVE_CLIENT_SECRET": "your-client-secret",
+    "GDRIVE_REFRESH_TOKEN": "your-refresh-token"
+  }
 }'
 ```
 
@@ -151,19 +149,21 @@ Delete a file from Google Drive.
 4. Back in Credentials, create an **OAuth client ID**:
    - Application type: **Desktop app**
    - Name: anything (e.g. "GDrive MCP Server")
-5. Click **Download JSON** and save it to `~/.config/google-drive-mcp/credentials.json`
+5. Note down the **Client ID** and **Client Secret**
 
-### Step 3: Run the server
+### Step 3: Obtain a refresh token
 
 ```bash
-uv run python -m gdrive_mcp_server.server
+uv sync --extra auth
+GDRIVE_CLIENT_ID=your-client-id GDRIVE_CLIENT_SECRET=your-client-secret \
+  uv run python -m gdrive_mcp_server.server --auth
 ```
 
-On first run, a browser window will open. Sign in with your Google account and grant Drive access. The refresh token is saved automatically.
+This opens a browser for OAuth consent and prints the refresh token to use.
 
-### Step 4: Configure the MCP server
+### Step 4: Configure and run
 
-Add the server to your Claude Code config (see [Usage with Claude Code](#usage-with-claude-code) above).
+Set environment variables and run (see [Configuration](#configuration) and [Usage with Claude Code](#usage-with-claude-code) above).
 
 ## License
 
