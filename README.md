@@ -1,4 +1,4 @@
-# Google Drive MCP Server
+# GDrive MCP Server
 
 An MCP (Model Context Protocol) server for the Google Drive API v3. This server allows AI assistants to list, search, read, upload, share, and delete files in Google Drive using OAuth 2.0 authentication.
 
@@ -53,7 +53,7 @@ On first run, a browser window will open for OAuth consent. The token is cached 
 ```bash
 claude mcp add-json google-drive '{
   "command": "uv",
-  "args": ["run", "--directory", "/path/to/google-drive-mcp-server", "server.py"]
+  "args": ["run", "--directory", "/path/to/gdrive-mcp-server", "python", "-m", "gdrive_mcp_server.server"]
 }'
 ```
 
@@ -150,13 +150,13 @@ Delete a file from Google Drive.
    - Add your Google account as a **test user**
 4. Back in Credentials, create an **OAuth client ID**:
    - Application type: **Desktop app**
-   - Name: anything (e.g. "Google Drive MCP Server")
+   - Name: anything (e.g. "GDrive MCP Server")
 5. Click **Download JSON** and save it to `~/.config/google-drive-mcp/credentials.json`
 
 ### Step 3: Run the server
 
 ```bash
-uv run server.py
+uv run python -m gdrive_mcp_server.server
 ```
 
 On first run, a browser window will open. Sign in with your Google account and grant Drive access. The refresh token is saved automatically.
