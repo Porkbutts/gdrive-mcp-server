@@ -8,7 +8,6 @@ files in Google Drive using OAuth 2.0 authentication.
 
 import os
 import io
-import base64
 from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -121,11 +120,16 @@ class GetFileInput(BaseModel):
     file_id: str = Field(..., description="The Google Drive file ID", min_length=1)
 
 
-class ReadFileInput(BaseModel):
-    """Input for reading file content."""
+class SaveFileInput(BaseModel):
+    """Input for saving a Drive file to local disk."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
     file_id: str = Field(..., description="The Google Drive file ID", min_length=1)
+    local_path: str = Field(
+        ...,
+        description="Local file path to save the downloaded content to.",
+        min_length=1,
+    )
     export_mime_type: Optional[str] = Field(
         default=None,
         description="For Google Workspace files, the MIME type to export as (e.g. 'text/plain', 'application/pdf', 'text/csv'). Ignored for binary files.",
@@ -382,38 +386,41 @@ async def gdrive_get_file(params: GetFileInput) -> str:
 
 
 @mcp.tool(
-    name="gdrive_read_file",
+    name="gdrive_save_file",
     annotations={
-        "title": "Read File Content",
-        "readOnlyHint": True,
+        "title": "Save File to Local Disk",
+        "readOnlyHint": False,
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": True,
     },
 )
-async def gdrive_read_file(params: ReadFileInput) -> str:
-    """Read or export the content of a file from Google Drive.
+async def gdrive_save_file(params: SaveFileInput) -> str:
+    """Download a file from Google Drive and save it to a local path.
 
     For Google Workspace files (Docs, Sheets, Slides), specify export_mime_type
     to choose the export format. Common values:
-      - Google Docs  -> 'text/plain' or 'text/markdown'
-      - Google Sheets -> 'text/csv'
-      - Google Slides -> 'text/plain'
+      - Google Docs  -> 'text/plain', 'text/markdown', 'application/pdf'
+      - Google Sheets -> 'text/csv', 'application/pdf'
+      - Google Slides -> 'text/plain', 'application/pdf'
+      - Google Drawings -> 'image/png'
 
-    For regular (binary/text) files, the raw content is returned.
+    For regular files (PDFs, images, etc.), the raw content is downloaded as-is.
+
+    After saving, use your local file-reading tools to read the content.
 
     Args:
-        params: ReadFileInput with file_id and optional export_mime_type.
+        params: SaveFileInput with file_id, local_path, and optional export_mime_type.
 
     Returns:
-        The file content as text, or a base64-encoded string for binary files.
+        A confirmation message with the saved file path and size.
     """
     try:
         service = _drive_service()
 
-        # First, get the MIME type to decide export vs download
         meta = service.files().get(fileId=params.file_id, fields="mimeType, name").execute()
         mime = meta.get("mimeType", "")
+        name = meta.get("name", "unknown")
 
         google_workspace_types = {
             "application/vnd.google-apps.document": "text/plain",
@@ -425,22 +432,20 @@ async def gdrive_read_file(params: ReadFileInput) -> str:
         if mime in google_workspace_types:
             export_mime = params.export_mime_type or google_workspace_types[mime]
             content = service.files().export(fileId=params.file_id, mimeType=export_mime).execute()
+        else:
+            content = service.files().get_media(fileId=params.file_id).execute()
 
-            if isinstance(content, bytes):
-                try:
-                    return content.decode("utf-8")
-                except UnicodeDecodeError:
-                    return base64.b64encode(content).decode("ascii")
-            return str(content)
+        if isinstance(content, str):
+            content = content.encode("utf-8")
 
-        # Regular file — download
-        content = service.files().get_media(fileId=params.file_id).execute()
-        if isinstance(content, bytes):
-            try:
-                return content.decode("utf-8")
-            except UnicodeDecodeError:
-                return f"[Binary file — {len(content)} bytes, base64-encoded]\n" + base64.b64encode(content).decode("ascii")
-        return str(content)
+        local_path = os.path.expanduser(params.local_path)
+        os.makedirs(os.path.dirname(os.path.abspath(local_path)), exist_ok=True)
+
+        with open(local_path, "wb") as f:
+            f.write(content)
+
+        size = len(content)
+        return f"Saved '{name}' to {local_path} ({size:,} bytes)"
 
     except Exception as e:
         return _handle_error(e)
