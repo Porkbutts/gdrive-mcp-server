@@ -159,6 +159,14 @@ GDRIVE_CLIENT_ID=your-client-id GDRIVE_CLIENT_SECRET=your-client-secret \
   uv run python -m gdrive_mcp_server.server --auth
 ```
 
+To include additional scopes (e.g. to share a refresh token with another MCP server):
+
+```bash
+GDRIVE_CLIENT_ID=your-client-id GDRIVE_CLIENT_SECRET=your-client-secret \
+  GDRIVE_EXTRA_SCOPES="https://www.googleapis.com/auth/gmail.modify" \
+  uv run python -m gdrive_mcp_server.server --auth
+```
+
 This opens a browser for OAuth consent and prints the refresh token to use.
 
 ### Step 4: Configure and run

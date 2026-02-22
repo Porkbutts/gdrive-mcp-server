@@ -641,6 +641,12 @@ def _run_auth_flow():
         print("Error: Set GDRIVE_CLIENT_ID and GDRIVE_CLIENT_SECRET environment variables first.")
         raise SystemExit(1)
 
+    extra = os.environ.get("GDRIVE_EXTRA_SCOPES", "")
+    extra_scopes = [s.strip() for s in extra.split(",") if s.strip()]
+    scopes = SCOPES + extra_scopes
+
+    print(f"Requesting scopes: {', '.join(scopes)}\n")
+
     client_config = {
         "installed": {
             "client_id": client_id,
@@ -650,7 +656,7 @@ def _run_auth_flow():
         }
     }
 
-    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+    flow = InstalledAppFlow.from_client_config(client_config, scopes)
     creds = flow.run_local_server(port=0)
 
     print("\nAuth successful! Set this environment variable:\n")
