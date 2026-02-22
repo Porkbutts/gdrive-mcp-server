@@ -103,7 +103,7 @@ def _handle_error(e: Exception) -> str:
 # MCP Server
 # ---------------------------------------------------------------------------
 
-mcp = FastMCP("google_drive_mcp")
+mcp = FastMCP("gdrive_mcp_server")
 
 # ---------------------------------------------------------------------------
 # Input models
